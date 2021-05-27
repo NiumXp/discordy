@@ -1,1 +1,2 @@
-from .core import GatewayWebSocket
+from .client import Client
+from .event import Manager

@@ -7,6 +7,10 @@ import sys
 GATEWAY = "wss://gateway.discord.gg/?v=9&encoding=json"
 
 
+class CloseConnection(Exception):
+    pass
+
+
 class Op:
     DISPATCH           = 0
     HEARTBEAT          = 1
@@ -25,6 +29,7 @@ class GatewayWebSocket:
 
         self.loop = None
         self.socket = None
+        self.manager = None
         self.sequence = None
         self.session_id = None
         self.heartbeat_interval = None
@@ -34,18 +39,17 @@ class GatewayWebSocket:
             data = json.dumps(data, separators=(',', ':'), ensure_ascii=True)
         return self.socket.send_str(data)
 
-    async def connect(self, session: aiohttp.ClientSession):
+    async def connect(self, session: aiohttp.ClientSession, manager):
         self.loop = session.loop
+        self.manager = manager
         self.socket = await session.ws_connect(GATEWAY)
 
         await self.poll_event()
         await self.identify()
 
     async def dispatch(self, event, data):
-        if event not in ["GUILD_CREATE", "MESSAGE_CREATE"]:
-            print(event, data)
-        else:
-            print(event)
+        if self.manager:
+            self.manager.emit(event, data)
 
     async def heartbeat(self):
         payload = {"op": Op.HEARTBEAT}
@@ -68,14 +72,14 @@ class GatewayWebSocket:
         if opcode != Op.DISPATCH:
             if opcode == Op.HELLO:
                 self.heartbeat_interval = data["heartbeat_interval"]
-                return print("HELLO", message)
+                return
 
             if opcode == Op.HEARTBEAT_ACK:
                 print("HEARTBEAT_ACK", message)
                 return
 
             if opcode == Op.HEARTBEAT:
-                print("HEARTBEAT")
+                print("HEARTBEAT", message)
                 return
 
             print("leaked", message)
@@ -98,19 +102,18 @@ class GatewayWebSocket:
     async def poll_event(self):
         message = await self.socket.receive(self.MAX_HEARTBEAT_TIMEOUT)
 
-        if message.type is aiohttp.WSMsgType.TEXT:
+        if message.type in (aiohttp.WSMsgType.TEXT,
+                            aiohttp.WSMsgType.BINARY):
             return await self.received_message(message.data)
 
         if message.type is aiohttp.WSMsgType.ERROR:
             raise message.data
 
-        if message.type is aiohttp.WSMsgType.CLOSE:
+        if message.type in (aiohttp.WSMsgType.CLOSE,
+                            aiohttp.WSMsgType.CLOSING,
+                            aiohttp.WSMsgType.CLOSED):
             print(message)
-            raise Exception("fechar conexão")
-
-        if message.type is aiohttp.WSMsgType.CLOSED:
-            print(message)
-            raise Exception("Conexão fechada")
+            raise CloseConnection
 
         print(message)
 
