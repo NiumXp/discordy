@@ -1,7 +1,5 @@
 import asyncio
 
-import signal
-
 import aiohttp
 
 from .core import GatewayWebSocket

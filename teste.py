@@ -1,24 +1,26 @@
+from dotenv import load_dotenv
 import discordy
-import dotenv
 
 import os
+import asyncio
+
+load_dotenv()
 
 
-class MessageManager(discordy.Manager):
-    async def on_MESSAGE_CREATE(self, message):
-        print("Mensagem criada!")
+async def main():
+    token = os.environ["TOKEN"]
+
+    d = discordy.Dispatcher()
+    g = discordy.Gateway(url="wss://gateway.discord.gg", version=9)
+    ws = discordy.WebSocket(token, 32509, 0, g, d)
+
+    await ws.connect()
+
+    while not ws.is_closed():
+        await ws.listen()
+
+    await ws.close()
 
 
-class GuildManager(discordy.Manager):
-    async def on_GUILD_CREATE(self, message):
-        print("Guilda criada!")
-
-
-dotenv.load_dotenv()
-
-token = os.environ["TOKEN"]
-intents = 32509
-managers = (MessageManager, GuildManager,)
-
-client = discordy.Client(token, intents, managers)
-client.run()
+loop = asyncio.get_event_loop()
+loop.run_until_complete(main())
